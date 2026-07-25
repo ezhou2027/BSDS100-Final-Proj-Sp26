@@ -1,0 +1,94 @@
+---
+title: "final"
+author: "Elizabeth Zhou"
+date: "2026-05-07"
+output: html_document
+---
+***Topic***
+Is there a relation between student GPA and dropout rates? 
+Packages used: ggplot2, for plotting. 
+
+***Relevant data***
+https://calviz.berkeley.edu/t/OPAP/views/AverageGPAbyMajorandDivision/GPAbyMajor?%3Aembed=y&%3AisGuestRedirectFromVizportal=y
+https://irap.uci.edu/student-success/
+The main challenge was sorting the data. UC Irvine and UC Berkeley do not share a lot of majors, despite sharing the University of California moniker. 
+
+```{r}
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+
+UCBData <- read.csv("~/Downloads/UCB Students - Average GPA by Major - Overall Average GPA by Major.csv") # average gpa by major at UC Berkeley
+latestUCBData <- UCBData %>% filter(as.numeric(Headcount) >= 50, na.rm = TRUE) %>% filter(Academic.Year == "2024-25") %>% arrange(desc(Average.GPA))
+
+summary(latestUCBData) # notes down average GPA for the academic year 2024-2025. 
+
+# lets find the lowest and highest average GPA at UC Berkeley in the 2024/2025 academic year
+highestAvgGPA <- max(latestUCBData$Average.GPA) 
+bestPerformingMajor <- latestUCBData[latestUCBData$Average.GPA == highestAvgGPA, ]
+
+lowestAvgGPA <- min(latestUCBData$Average.GPA)
+worstPerformingMajor <- latestUCBData[latestUCBData$Average.GPA == lowestAvgGPA, ]
+
+ggplot(data = filter(UCBData[UCBData$Major %in% c(worstPerformingMajor$Major, bestPerformingMajor$Major), ])) + aes(x = Academic.Year, y = Average.GPA, group = Major, color = Major) + geom_point(size = 2, shape = 8, na.rm = TRUE) + labs(x = "Academic Year", y = "Average GPA") + ylim(3.0, 4.0)
+
+```
+***Observations***
+In general, the average gpa of art students have always been greater than the gpa of astrophysics students. 
+The average gpa of astrophysics students seems to vary over time, while the average gpa of art students varies less. Disclaimer: UC Berkeley gives out BA degrees for everything, including the sciences. Astrophysics will be classified as a science for the purpose of this analysis. 
+
+```{r}
+highGPAData <- latestUCBData %>% head(3)
+lowGPAData <- latestUCBData %>% tail(3)
+
+ggplot(data = filter(UCBData[UCBData$Major %in% c(highGPAData$Major, lowGPAData$Major), ])) + aes(x = Academic.Year, y = Average.GPA, group = Major, color = Major) + geom_point(size = 2, shape = 8, na.rm = TRUE) + labs(x = "Academic Year", y = "Average GPA") + geom_smooth(method = "lm", se = F, color = "darkseagreen", linewidth = 0.25) + ylim(3.0, 4.0)
+
+# For research purposes: anthropology, art and history of art are classified as arts majors. Astrophysics, chemical engineering, and integrative biology are classified as science majors. 
+# Conclusion: Science majors often have slightly worse average GPAs than arts majors. 
+
+
+```
+But do these numbers correlate with dropout rates?
+
+The limitation here is that dropout rates can be contributed by 1. switching majors, 2. switching schools, 3. straight up dropping out and 4. taking a gap year. 
+
+***Note***
+Sample size is 50 since it is a significant amount to analyze. 
+
+```{r}
+UCIData <- read.csv("~/Downloads/UCI student success.csv")
+pastUCIData <- UCIData %>% filter(Number.of.students.in.entering.cohort >= 50) %>% filter(Yrs.Passed == "After 2 Years") %>% select(Student.Groupings, Entering.year, Number.of.students.in.entering.cohort, Yrs.Passed, Success.Rate) %>% filter(Student.Groupings != "Undeclared (000)")
+# looking at the retention rates for majors after the second year historically.
+
+latestUCIData <- UCIData %>% filter(Entering.year == "2024-25") %>% filter(Number.of.students.in.entering.cohort >= 50) %>% select(Student.Groupings, Number.of.students.in.entering.cohort, Success.Rate) 
+# i am choosing to filter out the majors with headcount less than 50 to increase precision. 
+
+# my goal here is to compare the retention rates for first years from the latest academic year to a couple of years ago, during Covid. 
+# now, lets look at the dropout rates for each.
+
+latestUCIData <- cbind(latestUCIData, Dropout.Rate = 1 - latestUCIData$Success.Rate)
+highestDORate <- (max(latestUCIData$Dropout.Rate))*100 # measures the highest dropout rate. 
+mostDroppedOut <- latestUCIData[latestUCIData$Dropout.Rate == highestDORate/100, ] # records the major that has the highest dropout rate (sociology).
+
+lowestDORate <- (min(latestUCIData$Dropout.Rate))*100
+leastDroppedOut <- latestUCIData[latestUCIData$Dropout.Rate == lowestDORate/100, ] # records the major that has the lowest dropout rate (psychological science).
+
+# we just need to find the corresponding majors in the UC Berkeley system and then plot them. 
+ggplot(data = filter(UCBData[UCBData$Major %in% c("Psychology", "Sociology"), ])) + aes(x = Academic.Year, y = Average.GPA, group = Major, color = Major) + geom_point(size = 2, shape = 9, na.rm = TRUE) + geom_smooth(method = "lm", se = F, color = "cornsilk3", linewidth = 0.5) + labs(x = "Academic Year", y = "Average GPA") + ylim(3.0, 4.0)
+
+# sociolog has the highest dropout rate, followed by film/media studies, then economics.  
+pastUCIData <- cbind(pastUCIData, Dropout.Rate = 1 - pastUCIData$Success.Rate) 
+# records the dropout rate after the second year. 
+ggplot(data = pastUCIData) + geom_bar(aes(x = Entering.year, y = Dropout.Rate), fill = 'cadetblue', stat = "identity") + labs(x = "Academic year", y = "Dropout rate (%)") + theme(strip.text = element_text(size = 6), axis.text.y = element_text(size = 5)) + facet_wrap(facets = . ~ Student.Groupings) + coord_flip() 
+
+```
+***Findings***
+In recent years, the sociology and film/media studies majors have been in decline, while majors like engineering and the sciences have kept a relatively low drop rate. 
+
+This could be because the job market is starting to favor jobs in tech or science, as they often have promising career paths.
+However, this is not the case. Physics and mathematics also have higher dropout rates - this is not because of the promising job market for graduates. This is because the curriculum in these two subjects is brutal. 
+
+One could assume that sociology majors have a higher GPA average since sociology is considered to be on the humanities side of things. However, when plotting psychology vs sociology GPA averages over time, statisically psychology majors perform better. Surprisingly psychological sciences/psychology has a lower drop rate than sociology. I think this is because that psychology majors have a clearer career trajectory than sociology majors. 
+
+***Conclusion***
+GPA is not a definite indication of dropout rate. In general, UC Irvine's most dropped major has a lower average GPA (taken from UC Berkeley) than its least dropped major.
